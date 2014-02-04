@@ -1,0 +1,217 @@
+
+<html xmlns="http://www.w3.org/1999/xhtml">
+<head>
+
+  <title>
+Lab 3 (extended) - CSE 110</title>
+
+  <meta http-equiv="Content-Type" content="text/html; charset=utf-8">
+
+  <meta name="generator" content="pandoc">
+
+  <link rel="stylesheet" href="./../../../style.css" type="text/css">
+
+</head>
+
+
+<body>
+<div id="page">
+
+<h1 class="title">
+Lab 3 (extended) - CSE 110</h1>
+
+<p>
+<a href="../../..">
+Home</a>
+ &gt; <a href="../../">
+Labs</a>
+ &gt; <a href="../">
+Lab3</a>
+</p>
+<hr>
+
+<h2>Communication between Service and Activity </h2>
+
+<h4>Introduction</h4>
+<p>This extended lab shows how to create a bound service, including how to bind
+to the service from other application components. However, you should also refer to the <a href="http://developer.android.com/guide/components/services.html">Services</a> document for additional
+information about services in general, such as how to deliver notifications from a service, set
+the service to run in the foreground, and more.</p>
+<h4 id="Basics" style="margin-bottom: 0px;">The Basics</h4>
+<p>A bound service is an implementation of the <code><a href="http://developer.android.com/reference/android/app/Service.html">Service</a></code> class that allows
+other applications to bind to it and interact with it. To provide binding for a
+service, you must implement the <code><a href="http://developer.android.com/reference/android/app/Service.html#onBind(android.content.Intent)">onBind()</a></code> callback method. This
+method returns an <code><a href="http://developer.android.com/reference/android/os/IBinder.html">IBinder</a></code> object that defines the programming interface that
+clients can use to interact with the service.</p>
+
+
+<p>A client can bind to the service by calling <code><a href="http://developer.android.com/reference/android/content/Context.html#bindService(android.content.Intent, android.content.ServiceConnection, int)">bindService()</a></code>. When it does, it must provide an implementation of <code><a href="http://developer.android.com/reference/android/content/ServiceConnection.html">ServiceConnection</a></code>, which monitors the connection with the service. The <code><a href="http://developer.android.com/reference/android/content/Context.html#bindService(android.content.Intent, android.content.ServiceConnection, int)">bindService()</a></code> method returns immediately without a value, but
+when the Android system creates the connection between the
+client and service, it calls <code><a href="http://developer.android.com/reference/android/content/ServiceConnection.html#onServiceConnected(android.content.ComponentName, android.os.IBinder)">onServiceConnected()</a></code> on the <code><a href="http://developer.android.com/reference/android/content/ServiceConnection.html">ServiceConnection</a></code>, to deliver the <code><a href="http://developer.android.com/reference/android/os/IBinder.html">IBinder</a></code> that
+the client can use to communicate with the service.</p>
+
+<p>Multiple clients can connect to the service at once. However, the system calls your service's
+<code><a href="http://developer.android.com/reference/android/app/Service.html#onBind(android.content.Intent)">onBind()</a></code> method to retrieve the <code><a href="http://developer.android.com/reference/android/os/IBinder.html">IBinder</a></code> only
+when the first client binds. The system then delivers the same <code><a href="http://developer.android.com/reference/android/os/IBinder.html">IBinder</a></code> to any
+additional clients that bind, without calling <code><a href="http://developer.android.com/reference/android/app/Service.html#onBind(android.content.Intent)">onBind()</a></code> again.</p>
+
+<p>When you implement your bound service, the most important part is defining the interface
+that your <code><a href="http://developer.android.com/reference/android/app/Service.html#onBind(android.content.Intent)">onBind()</a></code> callback method returns. There are a few
+different ways you can define your service's <code><a href="http://developer.android.com/reference/android/os/IBinder.html">IBinder</a></code> interface and the following
+section discusses each technique.</p>
+
+
+Following is an example of communication between service and an activity.
+</p>
+<h4>Binder</h4>
+<p class="ctxt2 mb30">For Activities and Services used in one application the Binder solution is recommended. After binding with the service, the Binder will allow the activity (or other class bound to the service) to call any public method of the service.</p>
+<h4>Music Service</h4>
+<p class="ctxt">First the service must define a class extending the Binder class and create an instance of it. In the following example, it is called <code>LocalBinder</code>. Reference to this instance will be exchanged with an activity. The <code>LocalBinder</code> may return the instance of enclosing Service class or contain public methods that Activity could call.</p>
+<p class="ctxt">In our example the <code>LocalBinder</code> will just return the reference to <code>MusicService</code> instance:</p>
+<pre class="ml0"><code>public class MusicService extends Service {
+	/**
+	 * Local Binder returned when binding with Activity. This binder will return
+	 * the enclosing MusicService instance.
+	 */
+	public class LocalBinder extends Binder {
+		/**
+		 * Return enclosing MusicService instance
+		 */
+		MusicService getService() {
+			return MusicService.this;
+		}
+	}
+
+	private final IBinder mBinder = new LocalBinder();
+}</code></pre>
+<p class="ctxt">When client (activity) will bind to the service we will return the instance of <code>LocalBinder</code>:</p>
+<pre class="ml0"><code>
+  
+	@Override
+	public IBinder onBind(Intent intent) {
+		return mBinder;
+	}
+</code></pre>
+ <p>
+The service will also define a public method which could be called by client. In our example we will retune the internal media player instance:</p>
+<pre class="ml0"><code>
+	/**
+	 * Public method which can be called from bound clients.
+	 *
+	 * This method will return Media Player.
+	 */
+
+	public MediaPlayer getMediaPlayer() {
+	       return mp;
+	}
+	</code></pre>
+<h4>Music Player Activity</h4>
+<p class="ctxt">This activity will hold a reference to the service:</p>
+<pre class="ml0"><code>
+public class MusicPlayerActivity extends Activity {
+	/**
+	 * Reference to our bound service.
+	 */
+	MusicService mService = null;
+
+}
+</code></pre>
+
+<p class="ctxt">The field <code>mService</code> is initialized on successful connection to the service. This is done by an instance of class <code>ServiceConnection</code>, an object for managing the connection:</p>
+<pre class="ml0"><code>
+	/**
+	 * Class for interacting with the main interface of the service.
+	 */
+	private ServiceConnection mConn = new ServiceConnection() {
+		@Override
+		public void onServiceConnected(ComponentName className, IBinder binder) {
+			Log.d(TAG, "Connected to service.");
+			mService = ((MusicService.LocalBinder) binder).getService();
+		}
+
+		@Override
+		public void onServiceDisconnected(ComponentName className) {
+			Log.d(TAG, "Disconnected from service.");
+			mService = null;
+		}
+	};
+</code></pre>
+
+<p class="ctxt">In <code>ServiceConnection</code> we override the method <code>onServiceConnected()</code>. This method is called after successful connection to the service. The <code>onServiceConnected()</code> calls <code>LocalBinder.getService()</code> to obtain the reference to the service. The Local Music Service was described in the previous section "Music Service".</p>
+<p class="ctxt">For an Activity to communicate with a service, the activity must first bind to the service, for example in the <code>onStart()</code> method:</p>
+<pre class="ml0"><code>
+	@Override
+	protected void onStart() {
+		super.onStart();
+		bindService(new Intent(this, MusicService.class), mConn,
+				Context.BIND_AUTO_CREATE);
+	}
+</code></pre>
+<p class="ctxt">It must also unbind in the <code>onStop()</code> method:</p>
+<pre class="ml0"><code>
+	@Override
+	protected void onStop() {
+		super.onStop();
+		unbindService(mConn);
+	}
+</code></pre>
+<p class="ctxt">After successfully binding to the service, the activity obtains a valid reference to the <code>MusicService</code> instance. 
+</p>
+<p> Download the code from <a href="MusicServiceDemo.zip">here</a> and play around with it to see how things are working for this player. </p>
+<img src="screenCapture.png" />
+
+<h3> Task </h3>
+<p>
+You have to add a label for the total duration of the song and the duration at which song is currently being played. To help you convert duration into hh:mm:ss, there is a function <code>milliSecondsToTimer</code> inside class <code>Utilities</code>. This function converts the time in milliseconds to string in "hh:mm:ss" format. Also look into the <code>MusicPlayerActivity</code> where progress bar is updated using a thread. You can use thread to update the label of played song duration label (hint: these values are already calculated for you inside this thread).
+</p>
+<p>
+You can use following code to create label for song duration:</p>
+<pre><code>
+ &lt;!-- Timer Display --&gt;
+    &lt;LinearLayout 
+        android:id="@+id/timerDisplay"
+        android:layout_above="@id/songProgressBar"
+        android:layout_width="fill_parent"
+        android:layout_height="wrap_content"
+        android:layout_marginRight="20dp"
+        android:layout_marginLeft="20dp"
+        android:layout_marginBottom="10dp"&gt;
+        &lt;!-- Current Duration Label --&gt;
+        &lt;TextView 
+            android:id="@+id/songCurrentDurationLabel"
+            android:layout_width="fill_parent"
+            android:layout_height="wrap_content"
+            android:layout_weight="1"
+            android:gravity="left"
+            android:textColor="#eeeeee"
+            android:textStyle="bold"/&gt;
+        &lt;!-- Total Duration Label --&gt;
+        &lt;TextView 
+            android:id="@+id/songTotalDurationLabel"
+            android:layout_width="fill_parent"
+            android:layout_height="wrap_content"
+            android:layout_weight="1"
+            android:gravity="right"
+            android:textColor="#04cbde"
+            android:textStyle="bold"/&gt;
+    &lt;/LinearLayout&gt;
+</code></pre>
+<p>
+Your app after modification should look something like this:
+</p>
+<br>
+<img src="afterChange.png" />
+<br>
+<h2>Side Note on Messenger</h2>
+<p>
+The recommended method of communication between Activities and Services for different applications' Inter-Process Communication (IPC) is by using Messengers. In this case, the service defines a handler for different incoming messages. This handler is then used in Messenger for transferring data via messages.
+
+To get bi-directional communication, the activity also has to register a Messenger and Handler. This Messenger is passed to the service in one of messages. Without this the service wouldn't know to who it should respond.
+</p>
+<p>
+To see more on how to use Messenger for communication, see <a href="http://developer.android.com/guide/components/bound-services.html#Messenger">this link</a>.
+</p>
+
+</div>
+</body>
+</html>
